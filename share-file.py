@@ -18,7 +18,7 @@
 
 # TODO:
 # - Implement program launching
-# - Implement query editing
+# - Implement commands for editing sharers
 # - Changing sorting method on the fly
 
 from __future__ import print_function
@@ -480,19 +480,27 @@ def input_hook(data, buffer, command):
             sharers = parse_sharers(wc.config_get_plugin("sharers"))
             share(sharers, file)
             BUFFERS.deactivate(buffer)
+        else:
+            wc.buffer_set(buffer, "input", "")
     elif command == "/input complete_next":
         browser.next()
     elif command == "/input complete_previous":
         browser.previous()
+    else:
+        return wc.WEECHAT_RC_OK
     force_redraw()
     return wc.WEECHAT_RC_OK_EAT
 
 
 def modifier_hook(data, modifier, modifier_data, string):
+    wc.prnt("", "mod: %s mod-data: %s string: '%s'" %
+            (modifier, modifier_data, string))
     buffer = wc.current_buffer()
     if buffer in BUFFERS:
         browser = BUFFERS.current().browser
+        string = wc.string_remove_color(string, "")
         if string != browser.input:
+            wc.prnt("", "Old and new input differ, setting new")
             browser.input = string
         return browser.render()
     return string
@@ -516,7 +524,7 @@ def install_hooks():
     HOOKS.extend([
         wc.hook_command_run("%d|%s" % (HOOK_PRIORITY, "/input *"),
                             "input_hook", ""),
-        wc.hook_modifier("%d|%s" % (HOOK_PRIORITY, "input_text_display"),
+        wc.hook_modifier("%d|%s" % (HOOK_PRIORITY, "input_text_display_with_cursor"),
                               "modifier_hook", "")
     ]) # yapf: disable
 
