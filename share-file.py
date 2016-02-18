@@ -16,6 +16,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+# TODO:
+# - Fix empty directory bug
+# - Implement program launching
+# - Implement query editing
+# - Changing sorting method on the fly
+
 from __future__ import print_function
 
 import math
@@ -44,9 +50,9 @@ SCRIPT_VERSION = "0.1"
 SCRIPT_LICENSE = "GPL3"
 SCRIPT_DESCRIPTION = "Quickly share files from WeeChat"
 
-SCRIPT_COMMAND = "share"
+SHARE_COMMAND = "share"
 
-COMMAND_HELP = """
+SHARE_HELP = """
 Quickly share files from WeeChat
 
 When the %(command)s is invoked, it displays a file chooser and lets the user
@@ -60,7 +66,7 @@ You might want to consider binding %(command)s to a key.
 For example, use
   /key bind meta-o /%(command)s
 to bind it to M-o
-""".lstrip() % {"command": SCRIPT_COMMAND,
+""".lstrip() % {"command": SHARE_COMMAND,
                 "script": SCRIPT_NAME, }
 
 HOOK_PRIORITY = 5000
@@ -72,19 +78,19 @@ def natsort_key(k):
     return [to_key(group) for group in re.split("([0-9]+)", k)]
 
 
-# Sorters asume list of absolute paths
-def sort_by_name(paths):
-    return sorted(paths, key=lambda p: natsort_key(os.path.basename(p)))
+# Sorters asume list of Files
+def sort_by_name(files):
+    return sorted(files, key=lambda f: natsort_key(f.display))
 
 
-def sort_by_mtime(paths):
-    compare = lambda a, b: os.path.getmtime(b) - os.path.getmtime(a)
-    return sorted(paths, cmp=compare)
+def sort_by_mtime(files):
+    compare = lambda a, b: os.path.getmtime(b.path) - os.path.getmtime(a.path)
+    return sorted(files, cmp=compare)
 
 
-def sort_by_size(paths):
-    compare = lambda a, b: os.path.getsize(a) - os.path.getsize(b)
-    return sorted(paths, cmp=compare)
+def sort_by_size(files):
+    compare = lambda a, b: os.path.getsize(a.path) - os.path.getsize(b.path)
+    return sorted(files, cmp=compare)
 
 
 SORTERS = {"name": sort_by_name, "mtime": sort_by_mtime, "size": sort_by_size}
@@ -115,6 +121,7 @@ def levenshtein(a, b):
     pass
 
 
+# TODO: implement
 def match_fuzzy(query, file):
     return True
 
@@ -167,11 +174,24 @@ def get_abbreviation():
         wc.config_get_plugin("abbreviate"), DEFAULT_ABBREVIATION)
 
 
-# Returns a list of absolute path names for a path
+File = namedtuple("File", ("path", "display"))
+
+
+# Returns a list of Files for a path
 def files(path):
     sort = get_sorter()
-    return sort([os.path.abspath(os.path.join(path, f)) \
-                 for f in os.listdir(path)])
+    files = sort([File(path=os.path.abspath(os.path.join(path, f)),
+                       display=f) for f in os.listdir(path)])
+    # Parent directory's entry is not sorted
+    if not is_root(path):
+        files.insert(0,
+                     File(path=os.path.abspath(os.path.join(path, os.pardir)),
+                          display=os.pardir))
+    return files
+
+
+def is_root(path):
+    return os.path.dirname(os.path.abspath(path)) == os.path.abspath(path)
 
 
 def present_keys(dict):
@@ -225,26 +245,26 @@ class Browser(object):
         self.change_directory(dir)
 
     def render(self):
-        entries = (self.__format_entry(p, n == self.index)
-                   for n, p in enumerate(self.visible_files, self.__offset))
+        entries = (self.__format_entry(f, n == self.index)
+                   for n, f in enumerate(self.visible_files, self.__offset))
         return self.renderer.render(self.input, self.page + 1, self.pages + 1,
                                     entries)
 
-    def __format_entry(self, path, selected):
-        name = os.path.basename(path)
-        if os.path.isdir(path):
-            return self.renderer.render_dir(name, selected)
+    def __format_entry(self, file, selected):
+        if os.path.isdir(file.path):
+            return self.renderer.render_dir(file.display, selected)
         else:
-            return self.renderer.render_file(name, selected)
+            return self.renderer.render_file(file.display, selected)
 
-    def __is_visible(self, path):
-        return self.hidden or not os.path.basename(path).startswith(".")
+    def __is_visible(self, file):
+        return self.hidden or \
+            file.display == ".." or \
+            not file.display.startswith(".")
 
-    def __is_matching(self, path):
+    def __is_matching(self, file):
         if not self.input:
             return True
-        matcher = get_matcher()
-        return matcher(self.input, os.path.basename(path))
+        return self.matcher(self.input, file.display)
 
     @property
     def __offset(self):
@@ -287,8 +307,8 @@ class Browser(object):
         self.input = ""
 
     def enter(self):
-        if os.path.isdir(self.selected):
-            self.change_directory(self.selected)
+        if os.path.isdir(self.selected.path):
+            self.change_directory(self.selected.path)
         else:
             return self.selected
 
@@ -406,17 +426,20 @@ def glob_match(glob, string):
         return glob == string
 
 
-def find_matching_launcher(launchers, file):
-    mime = magic.from_file(file, mime=True)
-    return next((l for l in launchers if glob_match(l.mime, mime)), None)
+def find_matching_sharers(sharers, path):
+    mime = magic.from_file(path, mime=True)
+    return next((l for l in sharers if glob_match(l.mime, mime)), None)
 
 
-def launch(launcher, file):
-    matching = find_matching_launcher(launchers, file)
+def share(sharers, file):
+    matching = find_matching_sharers(sharers, file.path)
     if matching:
-        wc.hook_process(matching.program, 0, "process_hook")
-    else:  # No matching launcher, report to user
-        pass
+        # wc.hook_process(matching.program, 0, "process_hook")
+        wc.prnt("",
+                "Sharing \"%s\" with %s" % (file.display, matching.program))
+    else:
+        wc.prnt("", wc.prefix("error") +
+                "Failed to share \"%s\": no matching sharer" % file.display)
 
 
 def force_redraw():
@@ -447,9 +470,9 @@ def input_hook(data, buffer, command):
     if command == "/input return":
         file = browser.enter()
         if file:
-            # Share
-            wc.prnt("", "File selected: %s" % file)
-            BUFFERS.deactivate(buffer)  # only if file
+            sharers = parse_sharers(wc.config_get_plugin("sharers"))
+            share(sharers, file)
+            BUFFERS.deactivate(buffer)
     elif command == "/input complete_next":
         browser.next()
     elif command == "/input complete_previous":
@@ -494,8 +517,7 @@ def main():
     if not wc.register(SCRIPT_NAME, SCRIPT_AUTHOR, SCRIPT_VERSION,
                        SCRIPT_LICENSE, SCRIPT_DESCRIPTION, "unload", ""):
         return
-    wc.hook_command(SCRIPT_COMMAND, COMMAND_HELP, "", "", "", "share_command",
-                    "")
+    wc.hook_command(SHARE_COMMAND, SHARE_HELP, "", "", "", "share_command", "")
     init_config()
     install_hooks()
 
