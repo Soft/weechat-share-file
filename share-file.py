@@ -100,17 +100,24 @@ def get_sorter():
     return SORTERS.get(wc.config_get_plugin("sort"), DEFAULT_SORTER)
 
 
+def case_transform(str):
+    if str_to_bool(wc.config_get_plugin("case_insensitive")):
+        return str.lower()
+    else:
+        return str
+
+
 # Matchers take file names
 def match_start(query, file):
-    return file.lower().startswith(query.lower())
+    return case_transform(file).startswith(case_transform(query))
 
 
 def match_contains(query, file):
-    return query.lower() in file.lower()
+    return case_transform(query) in case_transform(file)
 
 
 def match_glob(query, file):
-    return glob_match(query.lower(), file.lower())
+    return glob_match(case_transform(query), case_transform(file))
 
 
 FUZZINESS_MAX_DISTANCE = 3
@@ -176,7 +183,6 @@ def get_abbreviation():
 File = namedtuple("File", ("path", "display"))
 
 
-# Returns a list of Files for a path
 def files(sort, path):
     files = sort([File(path=os.path.abspath(os.path.join(path, f)),
                        display=f) for f in os.listdir(path)])
@@ -209,6 +215,7 @@ CONFIG = {
     "sort": ("name", "how to sort entries (%s)" % present_keys(SORTERS)),
     "matching":
     ("start", "matching method for entries (%s)" % present_keys(MATCHERS)),
+    "case_insensitive": ("yes", "is matching case insensitive"),
     "hidden": ("no", "show hidden files"),
     "abbreviate":
     ("end", "abbreviation method (%s)" % present_keys(ABBREVIATIONS)),
