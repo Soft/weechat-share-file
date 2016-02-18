@@ -177,8 +177,7 @@ File = namedtuple("File", ("path", "display"))
 
 
 # Returns a list of Files for a path
-def files(path):
-    sort = get_sorter()
+def files(sort, path):
     files = sort([File(path=os.path.abspath(os.path.join(path, f)),
                        display=f) for f in os.listdir(path)])
     # Parent directory's entry is not sorted
@@ -306,7 +305,7 @@ class Browser(object):
 
     def change_directory(self, path):
         self.dir = path
-        self.files = files(path)
+        self.files = files(self.sorter, path)
         self.input = ""
 
     def enter(self):
