@@ -17,7 +17,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # TODO:
-# - Fix empty directory bug
 # - Implement program launching
 # - Implement query editing
 # - Changing sorting method on the fly
@@ -258,7 +257,7 @@ class Browser(object):
 
     def __is_visible(self, file):
         return self.hidden or \
-            file.display == ".." or \
+            file.display == os.pardir or \
             not file.display.startswith(".")
 
     def __is_matching(self, file):
@@ -286,7 +285,9 @@ class Browser(object):
 
     @property
     def visible_files(self):
-        return self.filtered_files[self.__offset:self.__offset + self.entries]
+        filtered = self.filtered_files
+        return filtered[self.__offset:self.__offset + self.entries] \
+            if filtered else filtered
 
     def input_get(self):
         return self.__input
@@ -299,7 +300,9 @@ class Browser(object):
 
     @property
     def selected(self):
-        return self.filtered_files[self.index]
+        filtered = self.filtered_files
+        if filtered:
+            return filtered[self.index]
 
     def change_directory(self, path):
         self.dir = path
@@ -307,22 +310,27 @@ class Browser(object):
         self.input = ""
 
     def enter(self):
-        if os.path.isdir(self.selected.path):
-            self.change_directory(self.selected.path)
-        else:
-            return self.selected
+        if self.filtered_files:
+            if os.path.isdir(self.selected.path):
+                self.change_directory(self.selected.path)
+            else:
+                return self.selected
 
     def next(self):
-        if len(self.filtered_files) > self.index + 1:
-            self.index += 1
-        elif self.wrap:
-            self.index = 0
+        filtered = self.filtered_files
+        if filtered:
+            if len(filtered) > self.index + 1:
+                self.index += 1
+            elif self.wrap:
+                self.index = 0
 
     def previous(self):
-        if self.index > 0:
-            self.index -= 1
-        elif self.wrap:
-            self.index = len(self.filtered_files) - 1
+        filtered = self.filtered_files
+        if filtered:
+            if self.index > 0:
+                self.index -= 1
+            elif self.wrap:
+                self.index = len(filtered) - 1
 
 
 class Renderer(object):
