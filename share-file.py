@@ -17,7 +17,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # TODO:
-# - Implement commands for editing sharers
 # - Implement fuzzy matching
 # - Changing sorting method on the fly
 
@@ -36,12 +35,16 @@ except ImportError:
     print("This script must be run under WeeChat.")
     exit(1)
 
+
+def error(mesage, buffer=""):
+    wc.prnt(buffer, wc.prefix("error") + message)
+
+
 try:
     import magic
     HAS_MAGIC = True
 except:
-    wc.prnt("", wc.prefix("error") +
-            "Package python-magic is required for this script to work.")
+    error("Package python-magic is required for this script to work.")
     HAS_MAGIC = False
 
 SCRIPT_NAME = "share-file"
@@ -571,16 +574,14 @@ def share_command(data, buffer, args):
 
 def process_hook(data, command, code, out, err):
     if code == wc.WEECHAT_HOOK_PROCESS_ERROR:
-        wc.prnt(
-            buffer,
-            wc.prefix("error") + "Sharing failed: failed to start the program")
+        error("Sharing failed: failed to start the program", buffer)
     elif code == wc.WEECHAT_HOOK_PROCESS_RUNNING:
         # TODO: handle multiple calls
         pass
     elif code == 0:
         input_append_value(data, out)
     elif code > 0:
-        wc.prnt(buffer, wc.prefix("error") + "Sharing failed: non-zero status")
+        error("Sharing failed: non-zero status", buffer)
     return wc.WEECHAT_RC_OK
 
 
@@ -600,8 +601,7 @@ def share(sharers, file):
         wc.hook_process_hashtable(matching.program, args, timeout,
                                   "process_hook", wc.current_buffer())
     else:
-        wc.prnt("", wc.prefix("error") +
-                "Failed to share \"%s\": no matching sharer" % file.display)
+        error("Failed to share \"%s\": no matching sharer" % file.display)
 
 
 def input_hook(data, buffer, command):
