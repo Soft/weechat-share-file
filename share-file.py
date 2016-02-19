@@ -18,6 +18,7 @@
 
 # TODO:
 # - Implement commands for editing sharers
+# - Implement fuzzy matching
 # - Changing sorting method on the fly
 
 from __future__ import print_function
@@ -425,16 +426,6 @@ Sharer = namedtuple("Sharer", ("mime", "program"))
 BufferState = namedtuple("BufferState", ("previous_input", "browser"))
 
 
-def parse_sharers(string):
-    results = []
-    for entry in string.split(","):
-        parts = entry.split(" ")
-        if len(parts) != 2:
-            return None
-        results.append(Sharer(parts[0], parts[1]))
-    return results
-
-
 def glob_match(glob, string):
     start, end = False, False
     if glob == "*":
@@ -455,12 +446,41 @@ def glob_match(glob, string):
         return glob == string
 
 
+# TODO: escaping
+def parse_sharers(string):
+    results = []
+    if not string:
+        return results
+    for entry in string.split(","):
+        parts = re.split("\s+", entry)
+        if len(parts) != 2:
+            return None
+        results.append(Sharer(parts[0], parts[1]))
+    return results
+
+
+def serialize_sharers(sharers):
+    return ",".join("%s %s" % (s.mime, s.program) for s in sharers)
+
+
 def get_sharers():
     return parse_sharers(wc.config_get_plugin("sharers"))
 
 
 def set_sharers(sharers):
-    pass
+    wc.config_set_plugin("sharers", serialize_sharers(sharers))
+
+
+def add_sharer(index, sharer):
+    sharers = get_sharers()
+    sharers.insert(index, sharer)
+    set_sharers(sharers)
+
+
+def delete_sharer(index):
+    sharers = get_sharers()
+    del sharers[index]
+    set_sharers(sharers)
 
 
 def find_matching_sharer(sharers, path):
@@ -468,39 +488,74 @@ def find_matching_sharer(sharers, path):
     return next((l for l in sharers if glob_match(l.mime, mime)), None)
 
 
-def share(sharers, file):
-    matching = find_matching_sharer(sharers, file.path)
-    timeout = int(wc.config_get_plugin("timeout")) * 1000
-    if matching:
-        args = {"arg1": file.path}
-        wc.hook_process_hashtable(matching.program, args, timeout,
-                                  "process_hook", wc.current_buffer())
-    else:
-        wc.prnt("", wc.prefix("error") +
-                "Failed to share \"%s\": no matching sharer" % file.display)
+SHARERS_COMMAND = "sharers"
+SHARERS_HELP = "Edit and inspect sharers"
+SHARERS_ARGS = "add <mime> <program> [<index>] | del <index> | list"
+SHARERS_DESC = """
+   add: add association between MIME type and a program
+   del: delete association
+  list: list associations
 
+Examples:
+Associate program upload-image.sh with files of type image/*
+  /%(command)s add image/* upload-image.sh
+""".lstrip("\n") % {"command": SHARERS_COMMAND}
+SHARERS_COMPLETION = "add|del|list"
 
 DISPLAY_MIME_COLOR = "yellow"
 DISPLAY_PROGRAM_COLOR = "cyan"
 
 
-def display_sharers():
+def sharers_list_command(args):
     sharers = get_sharers()
-    max_length = max(map(lambda s: len(s.mime), sharers))
+    max_length = max(map(lambda s: len(s.mime), sharers) or [0])
     wc.prnt("", "All sharers:")
     for n, sharer in enumerate(sharers, 1):
         wc.prnt("", "  %d. %s%s %s" %
                 (n, color(DISPLAY_MIME_COLOR, sharer.mime),
                  " " * (max_length - len(sharer.mime)),
                  color(DISPLAY_PROGRAM_COLOR, sharer.program)))
+    return wc.WEECHAT_RC_OK
 
 
-def add_sharer(index, mime, program):
-    pass
+def sharers_add_command(args):
+    if not 2 <= len(args) <= 3:
+        return wc.WEECHAT_RC_ERROR
+    sharers = get_sharers()
+    if len(args) == 3:
+        if not args[2].isdigit() or not 1 <= int(args[2]) <= len(sharers) + 1:
+            return wc.WEECHAT_RC_ERROR
+        index = int(args[2]) - 1
+    else:
+        index = len(sharers)
+    add_sharer(index, Sharer(mime=args[0], program=args[1]))
+    return wc.WEECHAT_RC_OK
 
 
-def delete_sharer(index):
-    pass
+def sharers_del_command(args):
+    if len(args) != 1 or not args[0].isdigit():
+        return wc.WEECHAT_RC_ERROR
+    sharers = get_sharers()
+    index = int(args[0])
+    if not 1 <= index <= len(sharers):
+        return wc.WEECHAT_RC_ERROR
+    delete_sharer(index - 1)
+    return wc.WEECHAT_RC_OK
+
+
+SHARERS_SUB_COMMANDS = {
+    "add": sharers_add_command,
+    "del": sharers_del_command,
+    "list": sharers_list_command
+}
+
+
+def sharers_command(data, buffer, args):
+    args = re.split("\s+", args)
+    if not args:
+        return wc.WEECHAT_RC_ERROR
+    return SHARERS_SUB_COMMANDS.get(args[0],
+                                    lambda _: wc.WEECHAT_RC_ERROR)(args[1:])
 
 
 def force_redraw():
@@ -535,6 +590,18 @@ def input_append_value(buffer, value):
     new = old + space + value
     wc.buffer_set(buffer, "input", new)
     wc.buffer_set(buffer, "input_pos", str(len(new) - 1))
+
+
+def share(sharers, file):
+    matching = find_matching_sharer(sharers, file.path)
+    timeout = int(wc.config_get_plugin("timeout")) * 1000
+    if matching:
+        args = {"arg1": file.path}
+        wc.hook_process_hashtable(matching.program, args, timeout,
+                                  "process_hook", wc.current_buffer())
+    else:
+        wc.prnt("", wc.prefix("error") +
+                "Failed to share \"%s\": no matching sharer" % file.display)
 
 
 def input_hook(data, buffer, command):
@@ -596,9 +663,10 @@ def main():
                        SCRIPT_LICENSE, SCRIPT_DESCRIPTION, "unload", ""):
         return
     wc.hook_command(SHARE_COMMAND, SHARE_HELP, "", "", "", "share_command", "")
+    wc.hook_command(SHARERS_COMMAND, SHARERS_HELP, SHARERS_ARGS, SHARERS_DESC,
+                    SHARERS_COMPLETION, "sharers_command", "")
     init_config()
     install_hooks()
-    display_sharers()
 
 
 if __name__ == "__main__" and HAS_MAGIC:
