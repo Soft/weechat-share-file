@@ -1,7 +1,7 @@
 # coding=utf-8
 #
 # WeeChat script for quickly sharing files
-# Copyright (C) 2016 Samuel Laurén
+# Copyright (C) 2016 Samuel Laurén <samuel.lauren@iki.fi>
 # 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -17,7 +17,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # TODO:
-# - Implement program launching
 # - Implement commands for editing sharers
 # - Changing sorting method on the fly
 
@@ -28,6 +27,7 @@ import os
 import os.path
 import re
 from collections import namedtuple
+from functools import wraps
 
 try:
     import weechat as wc
@@ -107,17 +107,29 @@ def case_transform(str):
         return str
 
 
+def case_aware(fn):
+    @wraps(fn)
+    def wrap(query, file):
+        return fn(case_transform(query), case_transform(file))
+
+    return wrap
+
 # Matchers take file names
+
+
+@case_aware
 def match_start(query, file):
-    return case_transform(file).startswith(case_transform(query))
+    return file.startswith(query)
 
 
+@case_aware
 def match_contains(query, file):
-    return case_transform(query) in case_transform(file)
+    return query in file
 
 
+@case_aware
 def match_glob(query, file):
-    return glob_match(case_transform(query), case_transform(file))
+    return glob_match(query, file)
 
 
 FUZZINESS_MAX_DISTANCE = 3
@@ -228,6 +240,10 @@ CONFIG = {
 
 def str_to_bool(s):
     return s.lower() in ("yes", "on", "true")
+
+
+def color(color, str):
+    return "%s%s%s" % (wc.color(color), str, wc.color("reset"))
 
 # TODO: save input bar size and set it to growing for the period browser is open
 
@@ -354,24 +370,20 @@ class Renderer(object):
     def render_file(self, file, selected):
         name = file if self.full_selected and selected else self.abbreviation(
             self.max_length, file)
-        return self.__color(self.selected_color if selected else
-                            self.file_color, name)
+        return color(self.selected_color if selected else self.file_color,
+                     name)
 
     def render_dir(self, dir, selected):
         name = dir if self.full_selected and selected else self.abbreviation(
             self.max_length, dir)
-        return self.__color(self.selected_color if selected else
-                            self.dir_color, name)
+        return color(self.selected_color if selected else self.dir_color, name)
 
     def render(self, input, page, pages, entries):
-        start = self.__color(self.separator_color, "[")
-        end = self.__color(self.separator_color, "]")
-        return "%s: %s%s%s %s%d/%d%s %s" % (self.prompt, start, self.__color(
+        start = color(self.separator_color, "[")
+        end = color(self.separator_color, "]")
+        return "%s: %s%s%s %s%d/%d%s %s" % (self.prompt, start, color(
             self.input_color, input), end, start, page, pages, end,
                                             " ".join(entries))
-
-    def __color(self, color, str):
-        return "%s%s%s" % (wc.color(color), str, wc.color("reset"))
 
 
 class BufferManager(object):
@@ -384,14 +396,17 @@ class BufferManager(object):
         entries = int(wc.config_get_plugin("entries"))
         wrap = str_to_bool(wc.config_get_plugin("wrap"))
         hidden = str_to_bool(wc.config_get_plugin("hidden"))
+        input = wc.buffer_get_string(buffer, "input")
         assert entries > 0
+        wc.buffer_set(buffer, "input", "")
         browser = Browser(dir, entries, Renderer(), hidden, wrap, get_sorter(),
                           get_matcher())
-        self.buffers[buffer] = BufferState(
-            wc.buffer_get_string(buffer, "input"), browser)
+        self.buffers[buffer] = BufferState(input, browser)
 
     def deactivate(self, buffer):
+        state = self.buffers[buffer]
         del self.buffers[buffer]
+        wc.buffer_set(buffer, "input", state.previous_input)
 
     def __contains__(self, buffer):
         return buffer in self.buffers
@@ -440,25 +455,57 @@ def glob_match(glob, string):
         return glob == string
 
 
-def find_matching_sharers(sharers, path):
+def get_sharers():
+    return parse_sharers(wc.config_get_plugin("sharers"))
+
+
+def set_sharers(sharers):
+    pass
+
+
+def find_matching_sharer(sharers, path):
     mime = magic.from_file(path, mime=True)
     return next((l for l in sharers if glob_match(l.mime, mime)), None)
 
 
 def share(sharers, file):
-    matching = find_matching_sharers(sharers, file.path)
+    matching = find_matching_sharer(sharers, file.path)
+    timeout = int(wc.config_get_plugin("timeout")) * 1000
     if matching:
-        # wc.hook_process(matching.program, 0, "process_hook")
-        wc.prnt("",
-                "Sharing \"%s\" with %s" % (file.display, matching.program))
+        args = {"arg1": file.path}
+        wc.hook_process_hashtable(matching.program, args, timeout,
+                                  "process_hook", wc.current_buffer())
     else:
         wc.prnt("", wc.prefix("error") +
                 "Failed to share \"%s\": no matching sharer" % file.display)
 
 
+DISPLAY_MIME_COLOR = "yellow"
+DISPLAY_PROGRAM_COLOR = "cyan"
+
+
+def display_sharers():
+    sharers = get_sharers()
+    max_length = max(map(lambda s: len(s.mime), sharers))
+    wc.prnt("", "All sharers:")
+    for n, sharer in enumerate(sharers, 1):
+        wc.prnt("", "  %d. %s%s %s" %
+                (n, color(DISPLAY_MIME_COLOR, sharer.mime),
+                 " " * (max_length - len(sharer.mime)),
+                 color(DISPLAY_PROGRAM_COLOR, sharer.program)))
+
+
+def add_sharer(index, mime, program):
+    pass
+
+
+def delete_sharer(index):
+    pass
+
+
 def force_redraw():
-    wc.hook_signal_send("input_text_changed", wc.WEECHAT_HOOK_SIGNAL_STRING,
-                        "")
+    wc.hook_signal_send("input_text_changed", \
+                        wc.WEECHAT_HOOK_SIGNAL_STRING, "")
 
 
 def share_command(data, buffer, args):
@@ -469,11 +516,25 @@ def share_command(data, buffer, args):
 
 def process_hook(data, command, code, out, err):
     if code == wc.WEECHAT_HOOK_PROCESS_ERROR:
-        return wc.WEECHAT_RC_OK
+        wc.prnt(
+            buffer,
+            wc.prefix("error") + "Sharing failed: failed to start the program")
+    elif code == wc.WEECHAT_HOOK_PROCESS_RUNNING:
+        # TODO: handle multiple calls
+        pass
     elif code == 0:
-        pass  # Return URL
+        input_append_value(data, out)
     elif code > 0:
-        pass  # Cancel file entry
+        wc.prnt(buffer, wc.prefix("error") + "Sharing failed: non-zero status")
+    return wc.WEECHAT_RC_OK
+
+
+def input_append_value(buffer, value):
+    old = wc.string_remove_color(wc.buffer_get_string(buffer, "input"), "")
+    space = " " if old and old[-1] != " " else ""
+    new = old + space + value
+    wc.buffer_set(buffer, "input", new)
+    wc.buffer_set(buffer, "input_pos", str(len(new) - 1))
 
 
 def input_hook(data, buffer, command):
@@ -487,8 +548,6 @@ def input_hook(data, buffer, command):
             sharers = parse_sharers(wc.config_get_plugin("sharers"))
             share(sharers, file)
             BUFFERS.deactivate(buffer)
-        else:
-            wc.buffer_set(buffer, "input", "")
     elif command == "/input complete_next":
         browser.next()
     elif command == "/input complete_previous":
@@ -500,14 +559,11 @@ def input_hook(data, buffer, command):
 
 
 def modifier_hook(data, modifier, modifier_data, string):
-    wc.prnt("", "mod: %s mod-data: %s string: '%s'" %
-            (modifier, modifier_data, string))
     buffer = wc.current_buffer()
     if buffer in BUFFERS:
         browser = BUFFERS.current().browser
         string = wc.string_remove_color(string, "")
         if string != browser.input:
-            wc.prnt("", "Old and new input differ, setting new")
             browser.input = string
         return browser.render()
     return string
@@ -542,6 +598,7 @@ def main():
     wc.hook_command(SHARE_COMMAND, SHARE_HELP, "", "", "", "share_command", "")
     init_config()
     install_hooks()
+    display_sharers()
 
 
 if __name__ == "__main__" and HAS_MAGIC:
