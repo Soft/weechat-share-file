@@ -36,7 +36,7 @@ except ImportError:
     exit(1)
 
 
-def error(mesage, buffer=""):
+def error(message, buffer=""):
     wc.prnt(buffer, wc.prefix("error") + message)
 
 
@@ -53,23 +53,39 @@ SCRIPT_VERSION = "0.1"
 SCRIPT_LICENSE = "GPL3"
 SCRIPT_DESCRIPTION = "Quickly share files from WeeChat"
 
-SHARE_COMMAND = "share"
+SHARERS_COMMAND = "sharers"
+SHARERS_HELP = "Edit and inspect sharers"
+SHARERS_ARGS = "add <mime> <program> [<index>] | del <index> | list"
+SHARERS_DESC = """
+   add: add association between MIME type and a program
+   del: delete association
+  list: list associations
 
+Examples:
+Associate program upload-image.sh with files of type image/*
+  /%(command)s add image/* upload-image.sh
+""".lstrip("\n") % {"command": SHARERS_COMMAND}
+SHARERS_COMPLETION = "add|del|list"
+
+SHARE_COMMAND = "share"
 SHARE_HELP = """
 Quickly share files from WeeChat
 
-When the %(command)s is invoked, it displays a file chooser and lets the user
-select a file for sharing. Once the file is selected, the command shares it
-using an external application and returns its URL.
+When the %(share)s is invoked, it displays a file chooser and lets the user
+select a file for sharing. The selected file is shared using an external
+application and the resulting URL is returned.
 
-The choice of sharing application depends on the type of file in question. This
-can be configured via plugins.var.python.%(script)s.sharers.
+The choice of sharing application depends on the type of file in question.
+File's MIME type is matched against a list of configured programs and the first
+matching program is selected. These program associations can be edited with
+/%(sharers)s command.
 
-You might want to consider binding %(command)s to a key.
+You might want to consider binding %(share)s to a key.
 For example, use
-  /key bind meta-o /%(command)s
+  /key bind meta-o /%(share)s
 to bind it to M-o
-""".lstrip() % {"command": SHARE_COMMAND,
+""".lstrip() % {"share": SHARE_COMMAND,
+                "sharers": SHARERS_COMMAND,
                 "script": SCRIPT_NAME, }
 
 HOOK_PRIORITY = 5000
@@ -490,20 +506,6 @@ def find_matching_sharer(sharers, path):
     mime = magic.from_file(path, mime=True)
     return next((l for l in sharers if glob_match(l.mime, mime)), None)
 
-
-SHARERS_COMMAND = "sharers"
-SHARERS_HELP = "Edit and inspect sharers"
-SHARERS_ARGS = "add <mime> <program> [<index>] | del <index> | list"
-SHARERS_DESC = """
-   add: add association between MIME type and a program
-   del: delete association
-  list: list associations
-
-Examples:
-Associate program upload-image.sh with files of type image/*
-  /%(command)s add image/* upload-image.sh
-""".lstrip("\n") % {"command": SHARERS_COMMAND}
-SHARERS_COMPLETION = "add|del|list"
 
 DISPLAY_MIME_COLOR = "yellow"
 DISPLAY_PROGRAM_COLOR = "cyan"
