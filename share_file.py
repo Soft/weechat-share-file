@@ -45,7 +45,7 @@ except:
     error("Package python-magic is required for this script to work.")
     HAS_MAGIC = False
 
-SCRIPT_NAME = "share-file"
+SCRIPT_NAME = "share_file"
 SCRIPT_AUTHOR = "Samuel Laurén <samuel.lauren@iki.fi>"
 SCRIPT_VERSION = "0.1"
 SCRIPT_LICENSE = "GPL3"
