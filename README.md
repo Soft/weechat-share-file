@@ -1,11 +1,11 @@
 # Dashing file sharing for WeeChat :rocket:
 
-Weechat-share-file is an extension for popular WeeChat IRC-client that makes
-sharing files blazingly fast. No longer will there be a disparity between
-newfangled IM clients and the trusty old IRC when it comes to the ease of
-sharing photos and files. Just pick a file and WeeChat will share it using the
-sharing service of your choice and provide you with an URL ready to be sent out.
-All without leaving the comfort of your chat buffer.
+Weechat-share-file is an extension for popular [WeeChat](https://weechat.org)
+IRC-client that makes sharing files blazingly fast. No longer will there be a
+disparity between newfangled IM clients and the trusty old IRC when it comes to
+the ease of sharing photos and files. Just pick a file and WeeChat will share it
+using the sharing service of your choice and provide you with an URL ready to be
+sent out. All without leaving the comfort of your chat buffer.
 
 The script adds an integrated file browser to WeeChat that allows users to
 select the files they wish to share. How the files are actually shared is
@@ -17,6 +17,13 @@ The aesthetics of weechat-share-file have been strongly influenced by Emacs'
 [Ido-mode](https://www.gnu.org/software/emacs/manual/html_mono/ido.html) and the
 ever so useful [go.py](https://weechat.org/scripts/source/go.py.html/) buffer
 selection script.
+
+## Features
+
+- Snappy, search-oriented interface
+- Multiple matching methods
+- Sorting
+- ...and there is more!
 
 ## Installation
 
@@ -39,7 +46,7 @@ It is also recommended to bind the `/share` command to a key combination.
 
 	/key bind meta-o /share
 
-Binds the `/share` command to ALT-o
+Binds the `/share` command to `ALT-o`.
 
 ## Viewing and Editing Program Associations
 
@@ -84,7 +91,13 @@ now delete the default rule by executing:
 
 ## Usage
 
-
+Once setup, you should be able to invoke `/share` command on any buffer by
+pressing `ALT-o`. The command transforms the input bar into an inline file
+browser that can then be used to select files for sharing. The browser should
+support everything you would expect from any self-respecting file explorer
+utility. As a search-oriented interface, the listing can be further filtered
+down by searching. By default, `ALT-TAB` and `ALT-SHIFT-TAB` can be used to move
+between the candidates.
 
 ## Additional Configuration
 
