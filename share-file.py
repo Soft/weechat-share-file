@@ -16,9 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# TODO:
-# - Implement fuzzy matching
-# - Changing sorting method on the fly
+# TODO: exit chooser with a key binding
 
 from __future__ import print_function
 
@@ -465,7 +463,6 @@ def glob_match(glob, string):
         return glob == string
 
 
-# TODO: escaping
 def parse_sharers(string):
     results = []
     if not string:
@@ -576,14 +573,14 @@ def share_command(data, buffer, args):
 
 def process_hook(data, command, code, out, err):
     if code == wc.WEECHAT_HOOK_PROCESS_ERROR:
-        error("Sharing failed: failed to start the program", buffer)
+        error("Sharing failed: failed to start the program", data)
     elif code == wc.WEECHAT_HOOK_PROCESS_RUNNING:
         # TODO: handle multiple calls
         pass
     elif code == 0:
         input_append_value(data, out)
     elif code > 0:
-        error("Sharing failed: non-zero status", buffer)
+        error("Sharing failed: non-zero status", data)
     return wc.WEECHAT_RC_OK
 
 
@@ -617,6 +614,8 @@ def input_hook(data, buffer, command):
             sharers = parse_sharers(wc.config_get_plugin("sharers"))
             share(sharers, file)
             BUFFERS.deactivate(buffer)
+        else:
+            wc.buffer_set(buffer, "input", "")
     elif command == "/input complete_next":
         browser.next()
     elif command == "/input complete_previous":
