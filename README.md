@@ -16,14 +16,14 @@ an external sharing tool simply requires associating it with a
 The aesthetics of weechat-share-file have been strongly influenced by Emacs'
 [Ido-mode](https://www.gnu.org/software/emacs/manual/html_mono/ido.html) and the
 ever so useful [go.py](https://weechat.org/scripts/source/go.py.html/) buffer
-selection script.
+selection tool.
 
 ## Features
 
 - Snappy, search-oriented interface
 - Multiple matching methods
 - Sorting
-- ...and there is more!
+- …and more!
 
 ## Installation
 
@@ -50,14 +50,14 @@ Binds the `/share` command to `ALT-o`.
 
 ## Viewing and Editing Program Associations
 
-Weechat-share-file relies on external programs for sharing the files. This means
+weechat-share-file relies on external programs for sharing the files. This means
 it is not dependent on any particular service and that adding support for new
 services is close to trivial. However, this decoupling also means that there is
 some configuration required, before the script can be fully utilized. The
 `sharers` directory contains a few example scripts for uploading files to
 popular hosting services.
 
-Weechat-share-file chooses how a file should be shared based on its MIME type.
+weechat-share-file chooses how a file should be shared based on its MIME type.
 Applications can be associated with MIME type patterns. For example, by default
 the script has just a single association:
 
@@ -101,7 +101,7 @@ between the candidates.
 
 ## Additional Configuration
 
-Weechat-share-file supports a bunch of customization options. Available options
+weechat-share-file supports a bunch of customization options. Available options
 can be viewed with `/set plugins.var.python.share_file.*`.
 
 ## License

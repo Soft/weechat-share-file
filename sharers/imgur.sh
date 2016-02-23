@@ -3,6 +3,9 @@
 FILE="$1"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/imgur.conf"
 
+declare -a DEPS
+DEPS=( curl jq )
+
 function upload() {
     local url="https://api.imgur.com/3/image"
     local reply=$(curl -F "image=@\"${1}\"" \
@@ -13,8 +16,8 @@ function upload() {
 }
 
 function check-deps() {
-    for prog in curl jq; do
-        which "$prog" &>/dev/null
+    for prog in "${DEPS[@]}"; do
+        hash "$prog" &>/dev/null
         if [[ $? -ne 0 ]]; then
             echo "$prog is required" >&2
             exit 1

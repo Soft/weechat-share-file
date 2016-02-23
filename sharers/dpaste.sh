@@ -2,6 +2,9 @@
 
 FILE="$1"
 
+declare -a DEPS
+DEPS=( curl )
+
 declare -A TYPES
 TYPES=([c]=c \
        [clj]=clojure \
@@ -29,6 +32,16 @@ if [[ ! -r "$FILE" ]]; then
     exit 1
 fi
 
+function check-deps() {
+    for prog in "${DEPS[@]}"; do
+        hash "$prog" &>/dev/null
+        if [[ $? -ne 0 ]]; then
+            echo "$prog is required" >&2
+            exit 1
+        fi
+    done
+}
+
 # Default to python like the web interface does
 function language() {
     local extension="${1##*.}"
@@ -51,5 +64,6 @@ function upload() {
          2>/dev/null
 }
 
+check-deps
 LANGUAGE=$(language "$FILE")
 upload "$LANGUAGE" "$FILE"
