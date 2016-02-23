@@ -6,6 +6,8 @@ CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/imgur.conf"
 declare -a DEPS
 DEPS=( curl jq )
 
+MAX_SIZE=10000000
+
 function upload() {
     local url="https://api.imgur.com/3/image"
     local reply=$(curl -F "image=@\"${1}\"" \
@@ -25,6 +27,14 @@ function check-deps() {
     done
 }
 
+function check-file() {
+    local size=$(stat --printf="%s" "$1")
+    if [[ "$size" -gt "$MAX_SIZE" ]]; then
+        echo "\"$FILE\" is too large" >&2
+        exit 1
+    fi
+}
+
 if [[ -r "$CONFIG" ]]; then
     source "$CONFIG"
 fi
@@ -40,4 +50,5 @@ if [[ ! -r "$FILE" ]]; then
 fi
 
 check-deps
+check-file "$FILE"
 upload "$FILE"

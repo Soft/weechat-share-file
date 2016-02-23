@@ -16,7 +16,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# TODO: exit chooser with a key binding
+# TODO:
+# - Exit chooser with a key binding
+# - Progress indicator
 
 from __future__ import print_function
 
@@ -580,7 +582,7 @@ def process_hook(data, command, code, out, err):
     elif code == 0:
         input_append_value(data, out)
     elif code > 0:
-        error("Sharing failed: non-zero status", data)
+        error("Sharing failed (non-zero status): %s" % err.replace("\n", " "), data)
     return wc.WEECHAT_RC_OK
 
 
